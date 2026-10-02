@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Prueba en segundo plano</title>
+  <link rel="stylesheet" href="./src/bgtest/bgtest.css" />
+</head>
+<body>
+  <h1>Prueba en segundo plano</h1>
+  <p class="help">
+    1) Conecta la bota. 2) Pulsa <b>Empezar prueba</b>: oirás «prueba iniciada» y después un número
+    (tramas por segundo) cada 10 s. 3) Bloquea la pantalla, móvil al bolsillo, 10 minutos.
+    4) Desbloquea y pulsa <b>Parar</b>: el informe dice si los datos y la voz siguieron llegando.
+  </p>
+  <div class="row">
+    <button id="connect">Conectar bota</button>
+    <button id="start" disabled>Empezar prueba</button>
+    <button id="stop" class="ghost" disabled>Parar</button>
+  </div>
+  <div class="opts">
+    <label><input type="checkbox" id="optWake" /> Mantener pantalla encendida (Wake Lock)</label>
+    <label><input type="checkbox" id="optAudio" /> Audio silencioso continuo (truco para que iOS no suspenda la página)</label>
+    <label><input type="checkbox" id="optBeep" /> Solo pitido (sin voz)</label>
+  </div>
+  <div id="msg" class="msg"></div>
+  <div id="devices"></div>
+  <h2>Informe</h2>
+  <div class="row">
+    <button id="copy" class="ghost">Copiar</button>
+    <button id="share" class="ghost">Compartir / descargar</button>
+    <button id="clear" class="ghost">Borrar</button>
+  </div>
+  <pre id="report">Sin datos todavía.</pre>
+  <script type="module" src="./src/bgtest/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+# grabaciones generadas localmente (las de tests van en tests/fixtures si hace falta)
+*.skirec
+!tests/fixtures/*.skirec

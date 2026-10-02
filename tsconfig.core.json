@@ -1,0 +1,12 @@
+{
+  // Comprueba que el código puro compila SIN DOM ni APIs de Node:
+  // nada de window, document, navigator, Web Bluetooth ni setTimeout del navegador.
+  // (Date.now y Math.random existen en ES, así que los vigila src/core/purity.test.ts.)
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/core", "src/protocol", "src/sync", "src/sim"],
+  "exclude": ["**/*.test.ts"]
+}

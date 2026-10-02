@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sensor Live</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #181d23; --line: #262d36; --text: #e6e9ee; --muted: #8b95a3;
+    --accent: #4fb3ff; --ok: #3ccf8e; --warn: #ffb547; --bad: #ff5d5d;
+    --x: #ff6b6b; --y: #4fd68b; --z: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 18px; margin: 0; flex: 1; }
+  button { background: var(--accent); color: #001726; border: 0; border-radius: 10px;
+           padding: 10px 16px; font-weight: 600; font-size: 14px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; }
+  #msg { color: var(--muted); font-size: 13px; width: 100%; }
+  .devices { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+  .dot.on { background: var(--ok); }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 8px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 11px; }
+  .sec { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 6px;
+         display: flex; align-items: center; gap: 8px; }
+  canvas { width: 100%; height: 110px; display: block; background: var(--bg); border-radius: 10px; }
+  .legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+  .kv div { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 3px 0; }
+  .kv div span:first-child { color: var(--muted); }
+  .ext { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .ext div { background: var(--bg); border-radius: 8px; padding: 6px; font-size: 12px; font-variant-numeric: tabular-nums; min-height: 46px; }
+  .ext div span { color: var(--muted); font-size: 10px; display: block; }
+  .bars { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; height: 110px; }
+  .bar { background: var(--bg); border-radius: 8px; height: 100%; position: relative; overflow: hidden; }
+  .bar i { position: absolute; bottom: 0; left: 0; right: 0; background: var(--accent); }
+  .bar span { position: absolute; top: 4px; width: 100%; text-align: center; font-size: 11px; color: var(--muted); }
+  .bar em { position: absolute; bottom: 6px; width: 100%; text-align: center; font-size: 9px; font-style: normal; }
+  .fb { display: flex; align-items: center; gap: 12px; background: var(--bg); border-radius: 12px; padding: 10px; }
+  .fb .big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 90px; }
+  .fb .flag { padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; background: var(--line); }
+  .fb .flag.hit { background: var(--warn); color: #2b1a00; }
+  .fb label { color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 2px; margin-left: auto; }
+  .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 10px; border: 1px dashed var(--line); border-radius: 14px; }
+  /* estados de sensor */
+  .badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; text-transform: none; letter-spacing: 0; }
+  .st-ok   { background: rgba(60,207,142,.15); color: var(--ok); }
+  .st-fail { background: rgba(255,93,93,.15);  color: var(--bad); }
+  .st-none { background: var(--line);          color: var(--muted); }
+  .fail { outline: 1px solid var(--bad); }
+  .none { opacity: .45; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+          background: transparent; color: var(--text); font-weight: 500; }
+  .chip.off { background: var(--bad); border-color: var(--bad); color: #2a0000; }
+  .chip:disabled { opacity: .35; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sensor Live</h1>
+  <button id="connectBtn">Conectar dispositivo</button>
+  <div id="msg"></div>
+</header>
+<div class="devices" id="devices">
+  <div class="empty" id="empty">Pulsa «Conectar dispositivo» y elige SKI-L o SKI-R.<br>Puedes conectar las dos botas a la vez.</div>
+</div>
+
+<script>
+// ===== UUIDs y formato (idénticos al firmware, protocolo v3) =====
+const B = "-5c3a-4b7e-9a21-3c6d2e8b1f40";
+const SVC = "8f1d0001" + B, FRAME = "8f1d0002" + B, GPS = "8f1d0003" + B,
+      CTRL = "8f1d0004" + B, STATUS = "8f1d0005" + B, INFO = "8f1d0006" + B;
+const OP_START = 0x01, OP_STOP = 0x02, OP_RESET = 0x03, OP_SIM_FAIL = 0x20;
+const PROTO = 3;
+const HDR = 12;                 // tamaño de la cabecera
+const HIST = 500;               // 5 s de historia a 100 Hz
+
+// Bits de la máscara "valid"/"present"
+const BIT_IMU = 1 << 0, BIT_BARO = 1 << 9, BIT_GPS = 1 << 15;
+const BIT_FSR = i => 1 << (1 + i);
+// Zonas de los 8 FSR (ver documento de especificación)
+const FSR_ZONES = ["Talón int.", "Talón ext.", "Mediopié", "Met. 5", "Met. 2-3", "Met. 1", "Dedo gordo", "Dedos"];
+const FORE = [0, 0, 0.5, 1, 1, 1, 1, 1];   // peso de cada FSR en «delante»
+
+const $ = (s, el = document) => el.querySelector(s);
+const msg = t => $("#msg").textContent = t;
+
+if (!navigator.bluetooth) {
+  msg("Este navegador no tiene Web Bluetooth. En iPhone usa la app Bluefy; en PC, Chrome o Edge.");
+  $("#connectBtn").disabled = true;
+}
+
+// Estado de un sensor a partir de "present" (INFO) y "valid" (trama)
+function sensorState(present, valid, bit) {
+  if (!(present & bit)) return "none";
+  return (valid & bit) ? "ok" : "fail";
+}
+const STATE_TXT = { ok: "OK", fail: "sin señal", none: "no instalado" };
+
+// ===== Un objeto por dispositivo conectado =====
+class Dev {
+  constructor(device) {
+    this.device = device;
+    this.info = null;
+    this.count = 0; this.lost = 0; this.lastSeq = null; this.rate = 0;
+    this.gpsCount = 0; this.gpsRate = 0; this.gpsLost = 0; this.lastGpsSeq = null;
+    this.status = null; this.last = null; this.gps = null;
+    this.acc = [[], [], []]; this.gyr = [[], [], []];
+    this.peaks = 0; this.above = false; this.threshold = 1.15;
+    this.simFail = 0;
+  }
+
+  async connect() {
+    const server = await this.device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    const dv = await (await svc.getCharacteristic(INFO)).readValue();
+    const proto = dv.getUint8(0);
+    if (proto !== PROTO) {
+      this.device.gatt.disconnect();
+      throw new Error(`el firmware usa protocolo v${proto} y esta página espera v${PROTO}. Sube el firmware nuevo.`);
+    }
+    this.info = {
+      proto, role: dv.getUint8(1), fw: dv.getUint8(2),
+      side: dv.getUint8(3), nFsr: dv.getUint8(4), rate: dv.getUint8(5), gpsRate: dv.getUint8(6),
+      accLsb: dv.getFloat32(8, true), gyrLsb: dv.getFloat32(12, true),
+      present: dv.getUint16(16, true),
+    };
+    this.ctrl = await svc.getCharacteristic(CTRL);
+    this.buildCard();
+
+    const frame = await svc.getCharacteristic(FRAME);
+    frame.addEventListener("characteristicvaluechanged", e => this.onFrame(e.target.value));
+    await frame.startNotifications();
+
+    const status = await svc.getCharacteristic(STATUS);
+    status.addEventListener("characteristicvaluechanged", e => this.onStatus(e.target.value));
+    await status.startNotifications();
+
+    if (this.info.role === 1 && (this.info.present & BIT_GPS)) {
+      const gps = await svc.getCharacteristic(GPS);
+      gps.addEventListener("characteristicvaluechanged", e => this.onGps(e.target.value));
+      await gps.startNotifications();
+    }
+    await this.cmd(OP_SIM_FAIL, 0);   // empieza sin fallos simulados
+    await this.cmd(OP_START);
+    this.device.addEventListener("gattserverdisconnected", () => this.setOnline(false));
+    this.setOnline(true);
+  }
+
+  cmd(op, u16) {
+    const data = u16 === undefined ? new Uint8Array([op]) : new Uint8Array([op, u16 & 0xff, u16 >> 8]);
+    return this.ctrl.writeValueWithResponse(data);
+  }
+
+  // ----- parsing -----
+  imu(dv, o) {
+    const a = this.info.accLsb, g = this.info.gyrLsb;
+    return {
+      ax: dv.getInt16(o, true) / a,     ay: dv.getInt16(o + 2, true) / a, az: dv.getInt16(o + 4, true) / a,
+      gx: dv.getInt16(o + 6, true) / g, gy: dv.getInt16(o + 8, true) / g, gz: dv.getInt16(o + 10, true) / g,
+    };
+  }
+
+  onFrame(dv) {
+    const type = dv.getUint8(0), flags = dv.getUint8(1), valid = dv.getUint16(2, true),
+          seq = dv.getUint32(4, true), t = dv.getUint32(8, true);
+    if (this.lastSeq !== null && seq > this.lastSeq + 1) this.lost += seq - this.lastSeq - 1;
+    this.lastSeq = seq; this.count++;
+
+    const f = { seq, t, flags, valid, imu: this.imu(dv, HDR) };
+    f.fsr = []; for (let i = 0; i < this.info.nFsr; i++) f.fsr.push(dv.getUint16(HDR + 12 + i * 2, true));
+    if (type === 0x01) {
+      const o = HDR + 12 + this.info.nFsr * 2;
+      f.p = dv.getInt32(o, true) / 100; f.temp = dv.getInt16(o + 4, true) / 100;
+    }
+    // Reparto delante/detrás con los FSR válidos (0 = todo en el talón, 1 = todo delante)
+    let tot = 0, fore = 0;
+    f.fsr.forEach((v, i) => { if (valid & BIT_FSR(i)) { const p = Math.max(0, v - 120); tot += p; fore += p * FORE[i]; } });
+    f.load = tot; f.fore = tot > 0 ? fore / tot : null;
+    this.last = f;
+
+    // Solo se usan datos válidos: un sensor sin señal NO cuenta como 0
+    const imuOk = !!(valid & BIT_IMU);
+    const m = f.imu;
+    [m.ax, m.ay, m.az].forEach((v, i) => push(this.acc[i], imuOk ? v : NaN));
+    [m.gx, m.gy, m.gz].forEach((v, i) => push(this.gyr[i], imuOk ? v : NaN));
+
+    // --- Ejemplo de feedback instantáneo: picos de |a| con histéresis ---
+    if (imuOk) {
+      const mag = Math.hypot(m.ax, m.ay, m.az);
+      f.mag = mag;
+      if (!this.above && mag > this.threshold) { this.above = true; this.peaks++; this.hitUntil = performance.now() + 150; }
+      else if (this.above && mag < this.threshold - 0.05) this.above = false;
+    }
+  }
+
+  onGps(dv) {
+    const valid = dv.getUint16(2, true), seq = dv.getUint32(4, true);
+    if (this.lastGpsSeq !== null && seq > this.lastGpsSeq + 20) this.gpsLost += Math.round((seq - this.lastGpsSeq) / 20) - 1;
+    this.lastGpsSeq = seq; this.gpsCount++;
+    this.gps = {
+      seq, ok: !!(valid & 1),
+      lat: dv.getInt32(HDR, true) / 1e7, lon: dv.getInt32(HDR + 4, true) / 1e7, alt: dv.getInt32(HDR + 8, true) / 1000,
+      speed: dv.getUint16(HDR + 12, true) / 100, heading: dv.getUint16(HDR + 14, true) / 100,
+      fix: dv.getUint8(HDR + 16), sats: dv.getUint8(HDR + 17), hdop: dv.getUint16(HDR + 18, true) / 100,
+    };
+  }
+
+  onStatus(dv) {
+    this.status = { streaming: dv.getUint8(0), sync: dv.getUint8(1), sent: dv.getUint32(4, true),
+                    dropped: dv.getUint32(8, true), offset: dv.getInt32(12, true) };
+  }
+
+  // Lista de sensores de esta pieza: [nombre, bit]
+  sensors() {
+    const list = [["IMU", BIT_IMU], ...Array.from({ length: this.info.nFsr }, (_, i) => [`FSR ${i + 1}`, BIT_FSR(i)])];
+    if (this.info.role === 1) list.push(["Baro", BIT_BARO], ["GPS", BIT_GPS]);
+    return list;
+  }
+
+  // ----- UI -----
+  buildCard() {
+    $("#empty")?.remove();
+    const main = this.info.role === 1;
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      <h2><span class="dot"></span>${this.device.name || "Dispositivo"}</h2>
+      <div class="sub">${this.info.side === 1 ? "Bota izquierda" : "Bota derecha"}${main ? " · principal (baro + GPS)" : ""} · protocolo v${this.info.proto} · ${this.info.rate} Hz</div>
+      <div class="stats">
+        <div class="stat"><b data-k="rate">–</b><span>tramas/s</span></div>
+        <div class="stat"><b data-k="lost">0</b><span>perdidas</span></div>
+        <div class="stat"><b data-k="drop">–</b><span>descartadas TX</span></div>
+        <div class="stat"><b data-k="seq">–</b><span>seq</span></div>
+      </div>
+
+      <div class="sec">Feedback (ejemplo)</div>
+      <div class="fb">
+        <div class="big" data-k="mag">– g</div>
+        <div class="flag" data-k="flag">picos: 0</div>
+        <label>umbral <span data-k="thv">${this.threshold.toFixed(2)} g</span>
+          <input type="range" min="1.0" max="3" step="0.01" value="${this.threshold}" data-k="th"></label>
+      </div>
+
+      <div class="sec">IMU · aceleración (g) <span class="badge" data-k="b-imu"></span></div>
+      <canvas data-k="cacc"></canvas>
+      <div class="legend"><span><i style="background:var(--x)"></i>x</span><span><i style="background:var(--y)"></i>y</span><span><i style="background:var(--z)"></i>z</span></div>
+      <div class="sec">IMU · giro (°/s)</div>
+      <canvas data-k="cgyr"></canvas>
+
+      <div class="sec">Presión (8 FSR, talón → dedos) · delante <span data-k="fore">–</span></div>
+      <div class="bars" data-k="fsr">${FSR_ZONES.slice(0, this.info.nFsr).map((z, i) => `<div class="bar" title="${z}"><i></i><span>${i + 1}</span><em></em></div>`).join("")}</div>
+
+      ${main ? `
+        <div class="sec">Barómetro <span class="badge" data-k="b-baro"></span></div>
+        <div class="kv" data-k="baro">
+          <div><span>Presión</span><span data-k="p">–</span></div>
+          <div><span>Altitud</span><span data-k="alt">–</span></div>
+          <div><span>Temperatura</span><span data-k="temp">–</span></div>
+        </div>
+        <div class="sec">GPS <span class="badge" data-k="b-gps"></span></div>
+        <div class="kv" data-k="gps">
+          <div><span>Lat</span><span data-k="lat">–</span></div>
+          <div><span>Lon</span><span data-k="lon">–</span></div>
+          <div><span>Velocidad</span><span data-k="spd">–</span></div>
+          <div><span>Rumbo</span><span data-k="hdg">–</span></div>
+          <div><span>Fix / sats</span><span data-k="fix">–</span></div>
+          <div><span>GPS/s · perd.</span><span data-k="grate">–</span></div>
+        </div>
+      ` : ``}
+
+      <details>
+        <summary>Simular fallos de sensor</summary>
+        <div class="chips" data-k="chips" style="margin-top:8px">
+          ${this.sensors().map(([n, bit]) =>
+            `<button class="chip" data-bit="${bit}" ${(this.info.present & bit) ? "" : "disabled title='no instalado'"}>${n}</button>`).join("")}
+        </div>
+      </details>
+
+      <div class="row">
+        <button class="ghost" data-k="start">Start</button>
+        <button class="ghost" data-k="stop">Stop</button>
+        <button class="ghost" data-k="reset">Reset</button>
+        <button class="ghost" data-k="disc">Desconectar</button>
+      </div>`;
+    $("#devices").appendChild(el);
+    this.el = el;
+    const k = n => $(`[data-k="${n}"]`, el);
+    this.k = k;
+    k("th").oninput = e => { this.threshold = +e.target.value; k("thv").textContent = this.threshold.toFixed(2) + " g"; };
+    k("start").onclick = () => this.cmd(OP_START);
+    k("stop").onclick = () => this.cmd(OP_STOP);
+    k("reset").onclick = () => { this.lost = 0; this.gpsLost = 0; this.peaks = 0; this.cmd(OP_RESET); };
+    k("disc").onclick = () => this.device.gatt.disconnect();
+    k("chips").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+      this.simFail ^= +c.dataset.bit;
+      c.classList.toggle("off", !!(this.simFail & +c.dataset.bit));
+      this.cmd(OP_SIM_FAIL, this.simFail);
+    });
+  }
+
+  setOnline(on) {
+    $(".dot", this.el).classList.toggle("on", on);
+    if (!on) msg(`${this.device.name} desconectado`);
+  }
+
+  tickRates() {   // 1 Hz
+    this.rate = this.count; this.count = 0;
+    this.gpsRate = this.gpsCount; this.gpsCount = 0;
+  }
+
+  badge(key, state) {
+    const b = this.k(key);
+    if (!b) return;
+    b.className = "badge st-" + state;
+    b.textContent = STATE_TXT[state];
+  }
+
+  render() {      // ~10 Hz
+    const k = this.k, f = this.last, P = this.info.present;
+    k("rate").textContent = this.rate;
+    k("lost").textContent = this.lost;
+    k("drop").textContent = this.status ? this.status.dropped : "–";
+    if (!f) return;
+    const V = f.valid;
+    k("seq").textContent = f.seq;
+
+    const imuSt = sensorState(P, V, BIT_IMU);
+    this.badge("b-imu", imuSt);
+    k("mag").textContent = imuSt === "ok" ? f.mag.toFixed(2) + " g" : "– g";
+    const hit = performance.now() < (this.hitUntil || 0);
+    k("flag").classList.toggle("hit", hit);
+    k("flag").textContent = `picos: ${this.peaks}`;
+
+    if (this.info.role === 1) {
+      const bSt = sensorState(P, V, BIT_BARO);
+      this.badge("b-baro", bSt);
+      k("baro").classList.toggle("none", bSt !== "ok");
+      if (bSt === "ok") {
+        k("p").textContent = (f.p / 100).toFixed(2) + " hPa";
+        k("alt").textContent = (44330 * (1 - Math.pow(f.p / 101325, 0.1903))).toFixed(1) + " m";
+        k("temp").textContent = f.temp.toFixed(1) + " °C";
+      } else { k("p").textContent = k("alt").textContent = k("temp").textContent = "–"; }
+
+
+      const gSt = !(P & BIT_GPS) ? "none" : (this.gps && this.gps.ok ? "ok" : "fail");
+      this.badge("b-gps", gSt);
+      k("gps").classList.toggle("none", gSt !== "ok");
+      if (this.gps && this.gps.ok) {
+        const g = this.gps;
+        k("lat").textContent = g.lat.toFixed(6); k("lon").textContent = g.lon.toFixed(6);
+        k("spd").textContent = (g.speed * 3.6).toFixed(1) + " km/h";
+        k("hdg").textContent = g.heading.toFixed(0) + "°";
+        k("fix").textContent = `${g.fix}D / ${g.sats}`;
+      }
+      k("grate").textContent = `${this.gpsRate} · ${this.gpsLost}`;
+    }
+
+    k("fore").textContent = f.fore === null ? "–" : Math.round(f.fore * 100) + " %";
+    if (f.fsr) {
+      [...k("fsr").children].forEach((b, i) => {
+        const st = sensorState(P, V, BIT_FSR(i));
+        b.classList.toggle("fail", st === "fail");
+        b.classList.toggle("none", st === "none");
+        $("i", b).style.height = st === "ok" ? (f.fsr[i] / 4095 * 100) + "%" : "0%";
+        const em = $("em", b);
+        em.textContent = st === "ok" ? "" : (st === "fail" ? "sin señal" : "no inst.");
+        em.style.color = st === "fail" ? "var(--bad)" : "var(--muted)";
+      });
+    }
+  }
+
+  draw() {
+    plot(this.k("cacc"), this.acc, ["--x", "--y", "--z"]);
+    plot(this.k("cgyr"), this.gyr, ["--x", "--y", "--z"]);
+  }
+}
+
+function push(arr, v) { arr.push(v); if (arr.length > HIST) arr.shift(); }
+
+function plot(cv, series, colors) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  let min = Infinity, max = -Infinity;
+  series.forEach(s => s.forEach(v => { if (v < min) min = v; if (v > max) max = v; }));
+  if (!isFinite(min)) return;
+  const pad = (max - min) * 0.1 || 1; min -= pad; max += pad;
+  const css = getComputedStyle(document.documentElement);
+  c.strokeStyle = css.getPropertyValue("--line"); c.lineWidth = 1;
+  if (min < 0 && max > 0) { const y0 = h - (0 - min) / (max - min) * h; c.beginPath(); c.moveTo(0, y0); c.lineTo(w, y0); c.stroke(); }
+  series.forEach((s, j) => {
+    c.strokeStyle = css.getPropertyValue(colors[j]); c.lineWidth = 1.5; c.beginPath();
+    let pen = false;
+    s.forEach((v, i) => {
+      if (!isFinite(v)) { pen = false; return; }          // hueco cuando no hay dato válido
+      const x = i / (HIST - 1) * w, y = h - (v - min) / (max - min) * h;
+      pen ? c.lineTo(x, y) : c.moveTo(x, y);
+      pen = true;
+    });
+    c.stroke();
+  });
+  c.fillStyle = css.getPropertyValue("--muted"); c.font = "10px sans-serif";
+  c.fillText(max.toFixed(1), 4, 11); c.fillText(min.toFixed(1), 4, h - 4);
+}
+
+// ===== Conexión y bucles de refresco =====
+const devs = [];
+$("#connectBtn").onclick = async () => {
+  try {
+    msg("Buscando…");
+    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+    msg(`Conectando a ${device.name}…`);
+    const d = new Dev(device);
+    await d.connect();
+    devs.push(d);
+    msg(`${device.name} conectado`);
+  } catch (e) {
+    msg("Error: " + e.message);
+  }
+};
+
+setInterval(() => devs.forEach(d => d.tickRates()), 1000);
+setInterval(() => devs.forEach(d => d.render()), 100);
+(function loop() { devs.forEach(d => d.draw()); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
